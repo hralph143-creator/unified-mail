@@ -1,0 +1,88 @@
+{
+  "name": "unified-mail",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.18.3",
+  "description": "Windows 多邮箱统一管理与双向已读同步系统",
+  "main": "dist-electron/index.js",
+  "author": "UnifiedMail",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/ensure-electron-native.mjs && vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "node scripts/run-tests.mjs",
+    "test:watch": "node scripts/run-tests.mjs --watch",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "rebuild:electron": "node scripts/ensure-electron-native.mjs --repair",
+    "package:win": "pnpm build && pnpm rebuild:electron && electron-builder --win nsis",
+    "postinstall": "node scripts/ensure-electron-native.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
+  },
+  "devDependencies": {
+    "@vueuse/core": "^13.9.0",
+    "@electron/rebuild": "4.0.3",
+    "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^24.10.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "dompurify": "^3.3.0",
+    "drizzle-orm": "^0.44.7",
+    "electron": "^39.2.0",
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.39.1",
+    "eslint-plugin-vue": "^10.5.1",
+    "imapflow": "^1.0.195",
+    "mailparser": "^3.7.4",
+    "naive-ui": "^2.43.2",
+    "pinia": "^3.0.3",
+    "pino": "^10.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.2",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^4.0.9",
+    "vue": "^3.5.22",
+    "vue-eslint-parser": "^10.2.0",
+    "vue-tsc": "^3.1.4"
+  },
+  "build": {
+    "appId": "com.unifiedmail.desktop",
+    "productName": "多邮箱统一管理与双向同步系统",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release-delivery"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "UnifiedMail-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "多邮箱统一管理"
+    }
+  }
+}
