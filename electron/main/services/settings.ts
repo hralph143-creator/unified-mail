@@ -6,6 +6,8 @@ import { DEFAULT_SETTINGS } from '../db/database'
 export class SettingsService {
   constructor(private readonly database: AppDatabase) {}
 
+  get dataPath(): string { return this.database.directory }
+
   get(): AppSettings {
     const result = { ...DEFAULT_SETTINGS }
     const rows = this.database.sqlite.prepare('SELECT key,value FROM settings').all() as Array<{ key: keyof AppSettings; value: string }>

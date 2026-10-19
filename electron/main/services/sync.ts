@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { SyncSummary, SyncTrigger } from '../../../shared/types'
+import type { SyncRun, SyncSummary, SyncTrigger } from '../../../shared/types'
 import type { AppDatabase } from '../db/database'
 import type { AccountService } from './accounts'
 import type { ImapService, RemoteMail } from './imap'
@@ -16,6 +16,23 @@ export class SyncService {
   constructor(private readonly database: AppDatabase, private readonly accounts: AccountService, private readonly imap: ImapService, private readonly logger: AppLogger, private readonly events: SyncEvents) {}
 
   isRunning(): boolean { return this.allPromise !== null }
+
+  history(limit = 50): SyncRun[] {
+    const rows = this.database.sqlite.prepare(`SELECT s.*,a.display_name account_name FROM sync_runs s LEFT JOIN accounts a ON a.id=s.account_id ORDER BY s.started_at DESC LIMIT ?`).all(limit) as Array<Record<string, unknown>>
+    return rows.map((row) => ({
+      id: row.id as string,
+      accountId: row.account_id as string | null,
+      accountName: row.account_name as string | null,
+      trigger: row.trigger as SyncTrigger,
+      startedAt: row.started_at as string,
+      endedAt: row.ended_at as string | null,
+      status: row.status as SyncRun['status'],
+      addedCount: row.added_count as number,
+      updatedCount: row.updated_count as number,
+      errorCode: row.error_code as string | null,
+      errorMessage: row.error_message as string | null
+    }))
+  }
 
   syncAll(trigger: SyncTrigger = 'manual'): Promise<SyncSummary> {
     if (this.allPromise) return this.allPromise

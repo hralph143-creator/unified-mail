@@ -105,4 +105,13 @@ describe('同步与已读核心流程', () => {
     await expect(mails.markRead(mailId)).rejects.toThrow('网络不可用')
     expect(database.sqlite.prepare('SELECT is_read,operation_pending,sync_status FROM mails WHERE id=?').get(mailId)).toMatchObject({ is_read: 0, operation_pending: 0, sync_status: 'write_failed' })
   })
+
+  it('以领域模型返回最近同步历史', async () => {
+    seedAccount('qq', 'a@qq.com')
+    const sync = createSync({ qq: { uidValidity: '10', uidNext: 2, mails: [remote(1)] } }, ['qq'])
+    await sync.syncAll('scheduled')
+    expect(sync.history(1)).toEqual([
+      expect.objectContaining({ accountId: 'qq', accountName: 'a@qq.com', trigger: 'scheduled', status: 'success', addedCount: 1, updatedCount: 0 })
+    ])
+  })
 })
