@@ -6,7 +6,7 @@ export function registerSyncHandlers(register: RegisterHandler, sync: SyncServic
   register('sync:all', (rawTrigger) => sync.syncAll(parseSyncTrigger(rawTrigger)))
   register('sync:account', async (rawId) => {
     const result = await sync.syncAccount(parseId(rawId), 'account')
-    return { status: 'success', succeeded: 1, failed: 0, added: result.added, updated: result.updated }
+    return { status: 'success', succeeded: 1, failed: 0, added: result.added, updated: result.updated, remaining: result.remaining }
   })
   register('sync:state', () => ({ running: sync.isRunning() }))
   register('sync:history', (rawLimit) => sync.history(parseLimit(rawLimit)))

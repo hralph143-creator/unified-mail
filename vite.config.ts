@@ -4,6 +4,19 @@ import electron from 'vite-plugin-electron/simple'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('naive-ui')) return 'ui'
+          if (id.includes('vue') || id.includes('pinia') || id.includes('@vueuse')) return 'vue'
+          if (id.includes('dompurify')) return 'security'
+          return 'vendor'
+        }
+      }
+    }
+  },
   plugins: [
     vue(),
     electron({

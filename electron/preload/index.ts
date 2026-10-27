@@ -13,6 +13,7 @@ const api: UnifiedMailApi = {
     list: (query) => ipcRenderer.invoke('mails:list', query),
     detail: (id) => ipcRenderer.invoke('mails:detail', id),
     markRead: (id) => ipcRenderer.invoke('mails:mark-read', id),
+    markAllRead: (scope) => ipcRenderer.invoke('mails:mark-all-read', scope),
     downloadAttachment: (mailId, attachmentId) => ipcRenderer.invoke('mails:download-attachment', mailId, attachmentId)
   },
   sync: {
@@ -26,6 +27,10 @@ const api: UnifiedMailApi = {
     update: (patch) => ipcRenderer.invoke('settings:update', patch),
     dataPath: () => ipcRenderer.invoke('settings:data-path'),
     clearMailCache: () => ipcRenderer.invoke('settings:clear-cache')
+  },
+  appearance: {
+    setTourOverlay: (active) => ipcRenderer.invoke('window:set-tour-overlay', active),
+    controlWindow: (action) => ipcRenderer.invoke('window:control', action)
   },
   shell: { openExternal: (url) => ipcRenderer.invoke('shell:open-external', url) },
   events: {

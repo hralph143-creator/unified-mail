@@ -2,7 +2,14 @@ export class MailServiceError extends Error {
   constructor(public readonly code: string, message: string, public readonly technical?: string) { super(message) }
 }
 
+export class PartialMarkReadError extends MailServiceError {
+  constructor(message: string, public readonly confirmedUids: number[], technical?: string) {
+    super('WRITE_PARTIAL', message, technical)
+  }
+}
+
 export function classifyImapError(error: unknown): MailServiceError {
+  if (error instanceof MailServiceError) return error
   const raw = error instanceof Error ? error.message : String(error)
   const lower = raw.toLowerCase()
   if (lower.includes('auth') || lower.includes('login') || lower.includes('credential')) return new MailServiceError('AUTH_FAILED', '授权码错误、已失效，或 IMAP 服务尚未开启', raw)

@@ -19,4 +19,4 @@ async function load() { loading.value = true; try { rows.value = await window.un
 onMounted(load)
 </script>
 
-<template><main class="page-view history-page"><header class="page-header"><div><h1>同步记录</h1><span>最近 100 次账户同步结果</span></div><NButton :loading="loading" @click="load">刷新</NButton></header><NDataTable :columns="columns" :data="rows" :loading="loading" :bordered="false" /></main></template>
+<template><main class="page-view history-page"><header class="page-header"><div><h1>同步记录</h1><span>最近 100 次账户同步结果</span></div><NButton :loading="loading" @click="load">刷新</NButton></header><NDataTable :columns="columns" :data="rows" :loading="loading" :bordered="false" :scroll-x="720" /></main></template>

@@ -3,8 +3,8 @@ import { NButton, NEmpty, NInput, NPagination, NSelect, NSpin } from 'naive-ui'
 import type { MailSummary } from '../../shared/types'
 import { formatTime } from '../utils'
 
-defineProps<{ mails: MailSummary[]; total: number; selectedId?: string; loading: boolean; syncing: boolean; title: string; page: number; pageSize: number; search: string; sort: 'asc' | 'desc' }>()
-const emit = defineEmits<{ select: [mail: MailSummary]; sync: []; 'update:search': [value: string]; 'update:sort': [value: 'asc' | 'desc']; 'update:page': [value: number] }>()
+defineProps<{ mails: MailSummary[]; total: number; unreadCount: number; selectedId?: string; loading: boolean; syncing: boolean; markingAll: boolean; title: string; page: number; pageSize: number; search: string; sort: 'asc' | 'desc' }>()
+const emit = defineEmits<{ select: [mail: MailSummary]; sync: []; markAllRead: []; 'update:search': [value: string]; 'update:sort': [value: 'asc' | 'desc']; 'update:page': [value: number] }>()
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 function searchInput(value: string) { if (searchTimer) clearTimeout(searchTimer); searchTimer = setTimeout(() => emit('update:search', value), 300) }
 function senderInitial(mail: MailSummary): string { return (mail.senderName || mail.senderAddress || '邮').trim().slice(0, 1).toUpperCase() }
@@ -13,8 +13,11 @@ function senderInitial(mail: MailSummary): string { return (mail.senderName || m
 <template>
   <section class="mail-column">
     <header class="mail-toolbar">
-      <div><div class="toolbar-eyebrow">收件箱</div><h1>{{ title }} <span class="count-pill">{{ total }}</span></h1></div>
-      <NButton data-tour="sync-mail" class="sync-button" type="primary" size="small" :loading="syncing" :disabled="syncing" @click="emit('sync')"><span class="sync-glyph">↻</span>立即同步</NButton>
+      <div class="toolbar-title"><div class="toolbar-eyebrow">收件箱</div><h1>{{ title }} <span class="count-pill">{{ total }}</span></h1></div>
+      <div class="toolbar-actions">
+        <NButton class="mark-all-button" size="small" :loading="markingAll" :disabled="unreadCount === 0 || markingAll || syncing" @click="emit('markAllRead')"><span class="mark-read-glyph">✓</span>一键已读</NButton>
+        <NButton data-tour="sync-mail" class="sync-button" type="primary" size="small" :loading="syncing" :disabled="syncing || markingAll" @click="emit('sync')"><span class="sync-glyph">↻</span>立即同步</NButton>
+      </div>
     </header>
     <div class="mail-filters">
       <NInput data-tour="search-mail" class="search-field" :default-value="search" clearable placeholder="搜索发件人、主题或邮箱" @input="searchInput"><template #prefix><span class="search-glyph"></span></template></NInput>

@@ -12,10 +12,9 @@ interface WindowOptions {
 
 export function createMainWindow(options: WindowOptions): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1360, height: 840, minWidth: 960, minHeight: 620, show: false,
+    width: 1360, height: 840, minWidth: 720, minHeight: 540, show: false,
     title: '多邮箱统一管理', icon: appIcon, autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#f8fafc', symbolColor: '#536176', height: 44 },
     webPreferences: {
       preload: join(options.currentDir, 'index.mjs'),
       contextIsolation: true, sandbox: true, nodeIntegration: false,
@@ -32,8 +31,8 @@ export function createMainWindow(options: WindowOptions): BrowserWindow {
     }
   })
   window.on('closed', options.onClosed)
-  if (process.env.VITE_DEV_SERVER_URL) void window.loadURL(process.env.VITE_DEV_SERVER_URL)
-  else void window.loadFile(join(options.currentDir, '../dist/index.html'))
+  const loading = process.env.VITE_DEV_SERVER_URL ? window.loadURL(process.env.VITE_DEV_SERVER_URL) : window.loadFile(join(options.currentDir, '../dist/index.html'))
+  void loading.catch((error: unknown) => { console.error('主界面加载失败', error) })
   return window
 }
 

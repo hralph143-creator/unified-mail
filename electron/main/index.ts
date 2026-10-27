@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, Menu, type Tray } from 'electron'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createLogger } from './services/logger'
-import { registerIpc, unregisterIpc } from './ipc'
+import { registerIpc, unregisterIpc, waitForIpcIdle } from './ipc'
 import { createApplicationContext, type ApplicationContext } from './application'
 import { createAppTray, createMainWindow } from './desktop'
 
@@ -10,6 +10,8 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+let shutdownStarted = false
+let shutdownComplete = false
 let context: ApplicationContext | null = null
 
 function showWindow(): void {
@@ -37,9 +39,9 @@ async function bootstrap(): Promise<void> {
   const { accounts, imap, mails, settings, sync, scheduler } = context
   registerIpc({ accounts, imap, mails, settings, sync, onSettingsChanged: () => scheduler.restart() })
   mainWindow = openWindow()
-  tray = createAppTray({ onShow: showWindow, onSync: () => { void sync.syncAll('manual') }, onQuit: () => { quitting = true } })
+  tray = createAppTray({ onShow: showWindow, onSync: () => { void sync.syncAll('manual').catch(() => undefined) }, onQuit: () => { quitting = true } })
   scheduler.start()
-  if (settings.get().autoSyncEnabled) setTimeout(() => { void sync.syncAll('startup') }, 1500)
+  if (settings.get().autoSyncEnabled) setTimeout(() => { void sync.syncAll('startup').catch(() => undefined) }, 1500)
 }
 
 const hasLock = process.env.UNIFIEDMAIL_ALLOW_MULTIPLE === '1' || app.requestSingleInstanceLock()
@@ -56,4 +58,28 @@ else {
 
 app.on('activate', () => { if (mainWindow) showWindow(); else if (app.isReady() && context) mainWindow = openWindow() })
 app.on('window-all-closed', () => { /* Windows 下由托盘菜单决定何时退出。 */ })
-app.on('before-quit', () => { quitting = true; context?.scheduler.stop(); unregisterIpc(); tray?.destroy(); context?.database.close() })
+app.on('before-quit', (event) => {
+  if (shutdownComplete) return
+  event.preventDefault()
+  if (shutdownStarted) return
+  shutdownStarted = true
+  quitting = true
+  mainWindow?.setClosable(true)
+  mainWindow?.setMinimizable(true)
+  mainWindow?.setMaximizable(true)
+  context?.scheduler.stop()
+  unregisterIpc()
+  void (async () => {
+    if (context) {
+      await Promise.all([context.imap.shutdown(), context.sync.waitForIdle(), waitForIpcIdle()])
+      context.database.close()
+    }
+    tray?.destroy()
+    shutdownComplete = true
+    app.quit()
+  })().catch((error: unknown) => {
+    console.error('应用退出清理失败', error)
+    shutdownComplete = true
+    app.exit(1)
+  })
+})

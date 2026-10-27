@@ -2,7 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import type { MailService } from '../services/mails'
 import type { RegisterHandler } from './contracts'
-import { parseId, parseMailQuery } from './validation'
+import { parseId, parseMailQuery, parseMailScope } from './validation'
 
 async function saveAttachment(mails: MailService, rawMailId: unknown, rawAttachmentId: unknown): Promise<string | null> {
   const item = await mails.attachment(parseId(rawMailId), parseId(rawAttachmentId))
@@ -24,5 +24,6 @@ export function registerMailHandlers(register: RegisterHandler, mails: MailServi
   register('mails:list', (raw) => mails.list(parseMailQuery(raw)))
   register('mails:detail', (rawId) => mails.detail(parseId(rawId)))
   register('mails:mark-read', (rawId) => mails.markRead(parseId(rawId)))
+  register('mails:mark-all-read', (rawScope) => mails.markAllRead(parseMailScope(rawScope)))
   register('mails:download-attachment', (rawMailId, rawAttachmentId) => saveAttachment(mails, rawMailId, rawAttachmentId))
 }

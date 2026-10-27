@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { NButton, NCard, NInputNumber, NPopconfirm, NSelect, NSwitch, useMessage } from 'naive-ui'
 import type { Account, AppSettings } from '../../shared/types'
 import { formatTime, errorMessage } from '../utils'
 
-defineProps<{ accounts: Account[] }>()
+const props = defineProps<{ accounts: Account[] }>()
 const emit = defineEmits<{ add: []; edit: [account: Account]; changed: []; tutorial: [] }>()
 const message = useMessage()
 const settings = ref<AppSettings | null>(null)
 const dataPath = ref('')
 const saving = ref(false)
 const intervalOptions = [{ label: '15 分钟', value: 15 }, { label: '30 分钟', value: 30 }, { label: '1 小时', value: 60 }, { label: '3 小时', value: 180 }, { label: '6 小时', value: 360 }, { label: '12 小时', value: 720 }, { label: '24 小时', value: 1440 }]
+const scopeOptions = computed(() => [{ label: '统一收件箱', value: 'all' }, ...props.accounts.filter((account) => account.isEnabled).map((account) => ({ label: account.displayName, value: account.id }))])
 
 onMounted(async () => { settings.value = await window.unifiedMail.settings.get(); dataPath.value = await window.unifiedMail.settings.dataPath() })
 async function update(patch: Partial<AppSettings>) { saving.value = true; try { settings.value = await window.unifiedMail.settings.update(patch); message.success('设置已保存') } catch (e) { message.error(errorMessage(e)) } finally { saving.value = false } }
@@ -24,8 +25,8 @@ async function clearCache() { try { await window.unifiedMail.settings.clearMailC
   <main class="page-view settings-page">
     <header class="page-header"><div><h1>设置</h1><span>账户与本机运行设置</span></div><NButton type="primary" @click="emit('add')">添加邮箱</NButton></header>
     <NCard title="邮箱账户" size="small">
-      <div v-if="accounts.length" class="settings-accounts">
-        <div v-for="account in accounts" :key="account.id" class="settings-account">
+      <div v-if="props.accounts.length" class="settings-accounts">
+        <div v-for="account in props.accounts" :key="account.id" class="settings-account">
           <div><strong>{{ account.displayName }}</strong><span>{{ account.email }}</span><small>{{ account.lastError || `最近同步：${formatTime(account.lastSyncAt)}` }}</small></div>
           <NSwitch :value="account.isEnabled" @update:value="value => toggle(account, value)" />
           <NButton size="small" :disabled="!account.isEnabled" @click="sync(account)">同步</NButton>
@@ -42,6 +43,7 @@ async function clearCache() { try { await window.unifiedMail.settings.clearMailC
       <div class="setting-row"><div><strong>关闭窗口时最小化到托盘</strong><span>托盘运行期间自动同步会继续</span></div><NSwitch :value="settings.minimizeToTray" @update:value="value => update({ minimizeToTray: value })" /></div>
       <div class="setting-row"><div><strong>系统通知</strong><span>同步发现新未读邮件时通知</span></div><NSwitch :value="settings.notificationsEnabled" @update:value="value => update({ notificationsEnabled: value })" /></div>
       <div class="setting-row"><div><strong>每页邮件数量</strong><span>适用于统一收件箱列表</span></div><NInputNumber :value="settings.pageSize" :min="10" :max="100" :step="10" style="width: 150px" @update:value="value => value && update({ pageSize: value })" /></div>
+      <div class="setting-row"><div><strong>默认收件箱</strong><span>应用启动后优先显示的邮箱范围</span></div><NSelect :value="settings.defaultAccountScope" :options="scopeOptions" style="width: 180px" @update:value="value => update({ defaultAccountScope: value })" /></div>
     </NCard>
     <NCard title="本地数据" size="small">
       <div class="setting-row"><div><strong>数据存储位置</strong><span class="path-text">{{ dataPath }}</span></div></div>

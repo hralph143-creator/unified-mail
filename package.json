@@ -14,6 +14,7 @@
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.mjs",
+    "test:responsive": "node scripts/responsive-smoke.mjs",
     "test:watch": "node scripts/run-tests.mjs --watch",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "rebuild:electron": "node scripts/ensure-electron-native.mjs --repair",

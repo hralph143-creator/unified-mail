@@ -6,7 +6,7 @@ import vueParser from 'vue-eslint-parser'
 export default [
   { ignores: ['node_modules/**', 'dist/**', 'dist-electron/**', 'release/**', 'coverage/**'] },
   js.configs.recommended,
-  { files: ['scripts/**/*.mjs'], languageOptions: { globals: { process: 'readonly' } } },
+  { files: ['scripts/**/*.mjs'], languageOptions: { globals: { process: 'readonly', console: 'readonly', fetch: 'readonly', WebSocket: 'readonly', setTimeout: 'readonly' } } },
   ...tseslint.configs.recommended,
   ...vue.configs['flat/recommended'],
   {

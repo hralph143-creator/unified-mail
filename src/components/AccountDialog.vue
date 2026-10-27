@@ -32,7 +32,7 @@ async function save() {
 </script>
 
 <template>
-  <NModal :show="show" preset="card" :title="account ? '重新授权或修改账户' : '添加邮箱账户'" style="width: 560px" :mask-closable="false" @update:show="value => emit('update:show', value)">
+  <NModal :show="show" preset="card" :title="account ? '重新授权或修改账户' : '添加邮箱账户'" style="width: min(560px, calc(100vw - 32px))" :mask-closable="false" @update:show="value => emit('update:show', value)">
     <NForm label-placement="left" label-width="105" @submit.prevent="save">
       <NFormItem label="服务商">
         <NRadioGroup v-model:value="form.provider"><NRadioButton v-for="(item, key) in PROVIDERS" :key="key" :value="key">{{ item.label }}</NRadioButton></NRadioGroup>

@@ -3,7 +3,7 @@ import { simpleParser, type AddressObject } from 'mailparser'
 import type { AccountInput, AttachmentInfo, TestConnectionResult } from '../../../shared/types'
 import type { AccountService } from './accounts'
 import type { CredentialService } from './credentials'
-import { classifyImapError, MailServiceError } from './errors'
+import { classifyImapError, MailServiceError, PartialMarkReadError } from './errors'
 import type { AppLogger } from './logger'
 
 export interface RemoteMail {
@@ -11,12 +11,20 @@ export interface RemoteMail {
   preview: string; receivedAt: string; hasAttachments: boolean
 }
 
+export interface KnownMailboxState { uidValidity: string | null; unreadUids: number[] }
+export interface UnreadMailboxState { uidValidity: string; uidNext: number | null; unreadUids: number[]; mails: RemoteMail[]; remaining: number }
+
+const MAX_NEW_MESSAGES_PER_SYNC = 500
+
 function addresses(value: AddressObject | AddressObject[] | undefined): string[] {
   const values = Array.isArray(value) ? value : value ? [value] : []
   return values.flatMap((item) => item.value.map((entry) => entry.address ?? '').filter(Boolean))
 }
 
 export class ImapService {
+  private readonly clients = new Set<ImapFlow>()
+  private shuttingDown = false
+  private idleResolvers: Array<() => void> = []
   constructor(private readonly accounts: AccountService, private readonly credentials: CredentialService, private readonly logger: AppLogger) {}
 
   private createClient(config: { email: string; host: string; port: number; secure: boolean; authorizationCode: string }): ImapFlow {
@@ -28,11 +36,13 @@ export class ImapService {
   }
 
   async withAccount<T>(accountId: string, action: (client: ImapFlow) => Promise<T>): Promise<T> {
+    if (this.shuttingDown) throw new MailServiceError('APP_SHUTTING_DOWN', '应用正在退出，已取消邮箱操作')
     const account = this.accounts.get(accountId)
     if (!account) throw new MailServiceError('ACCOUNT_NOT_FOUND', '邮箱账户不存在')
     if (!account.isEnabled) throw new MailServiceError('ACCOUNT_DISABLED', '该邮箱账户已停用')
     const code = this.credentials.read(account.credentialReference)
     const client = this.createClient({ email: account.email, host: account.imapHost, port: account.imapPort, secure: account.imapSecure, authorizationCode: code })
+    this.clients.add(client)
     try {
       await client.connect()
       return await action(client)
@@ -40,11 +50,17 @@ export class ImapService {
       throw classifyImapError(error)
     } finally {
       if (client.usable) await client.logout().catch(() => client.close())
+      this.clients.delete(client)
+      if (!this.clients.size) {
+        for (const resolve of this.idleResolvers.splice(0)) resolve()
+      }
     }
   }
 
   async test(input: AccountInput): Promise<TestConnectionResult> {
+    if (this.shuttingDown) throw new MailServiceError('APP_SHUTTING_DOWN', '应用正在退出，已取消邮箱操作')
     const client = this.createClient({ email: input.email, host: input.imapHost, port: input.imapPort, secure: input.imapSecure, authorizationCode: input.authorizationCode })
+    this.clients.add(client)
     try {
       await client.connect()
       await client.mailboxOpen('INBOX', { readOnly: true })
@@ -55,10 +71,14 @@ export class ImapService {
       return { ok: false, code: classified.code, message: classified.message }
     } finally {
       if (client.usable) await client.logout().catch(() => client.close())
+      this.clients.delete(client)
+      if (!this.clients.size) {
+        for (const resolve of this.idleResolvers.splice(0)) resolve()
+      }
     }
   }
 
-  async listUnread(accountId: string): Promise<{ uidValidity: string; uidNext: number | null; mails: RemoteMail[] }> {
+  async listUnread(accountId: string, known?: KnownMailboxState): Promise<UnreadMailboxState> {
     return this.withAccount(accountId, async (client) => {
       const lock = await client.getMailboxLock('INBOX', { readOnly: true })
       try {
@@ -68,9 +88,13 @@ export class ImapService {
         const uidNext = mailbox.uidNext ?? null
         const unseenResult = await client.search({ seen: false }, { uid: true })
         const unseen = unseenResult || []
-        if (!unseen.length) return { uidValidity, uidNext, mails: [] }
+        if (!unseen.length) return { uidValidity, uidNext, unreadUids: [], mails: [], remaining: 0 }
+        const knownUids = known?.uidValidity === uidValidity ? new Set(known.unreadUids) : new Set<number>()
+        const missing = unseen.filter((uid) => !knownUids.has(uid))
+        const requested = missing.slice(-MAX_NEW_MESSAGES_PER_SYNC)
+        if (!requested.length) return { uidValidity, uidNext, unreadUids: unseen, mails: [], remaining: 0 }
         const mails: RemoteMail[] = []
-        for await (const message of client.fetch(unseen, { uid: true, envelope: true, internalDate: true, bodyStructure: true, source: { start: 0, maxLength: 96 * 1024 } }, { uid: true })) {
+        for await (const message of client.fetch(requested, { uid: true, envelope: true, internalDate: true, bodyStructure: true, source: { start: 0, maxLength: 96 * 1024 } }, { uid: true })) {
           const envelope = message.envelope
           const sender = envelope?.from?.[0]
           let preview = ''
@@ -88,7 +112,7 @@ export class ImapService {
             receivedAt: new Date(message.internalDate ?? envelope?.date ?? Date.now()).toISOString(), hasAttachments
           })
         }
-        return { uidValidity, uidNext, mails }
+        return { uidValidity, uidNext, unreadUids: unseen, mails, remaining: Math.max(0, missing.length - requested.length) }
       } finally { lock.release() }
     })
   }
@@ -104,6 +128,43 @@ export class ImapService {
         if (!confirmation || !confirmation.flags?.has('\\Seen')) throw new MailServiceError('WRITE_UNCONFIRMED', '服务器未能确认已读状态，请稍后重试')
       } finally { lock.release() }
     })
+  }
+
+  async markAllRead(accountId: string, uids: number[], expectedUidValidity: string): Promise<number[]> {
+    if (!uids.length) return []
+    const confirmed: number[] = []
+    try {
+      await this.withAccount(accountId, async (client) => {
+        const lock = await client.getMailboxLock('INBOX')
+        try {
+          if (!client.mailbox || String(client.mailbox.uidValidity) !== expectedUidValidity) throw new MailServiceError('UIDVALIDITY_CHANGED', '邮箱索引已变化，请先重新同步后再操作')
+          for (let index = 0; index < uids.length; index += 500) {
+            const requested = uids.slice(index, index + 500)
+            const batch = requested.join(',')
+            const changed = await client.messageFlagsAdd(batch, ['\\Seen'], { uid: true })
+            if (!changed) throw new PartialMarkReadError('服务器未确认批量已读操作，请重新同步确认状态', [...confirmed])
+            const seen = new Set<number>()
+            for await (const message of client.fetch(batch, { uid: true, flags: true }, { uid: true })) {
+              if (message.flags?.has('\\Seen')) seen.add(message.uid)
+            }
+            confirmed.push(...requested.filter((uid) => seen.has(uid)))
+            if (seen.size !== requested.length) throw new PartialMarkReadError('部分邮件已被移动、删除或未能确认已读状态', [...confirmed])
+          }
+        } finally { lock.release() }
+      })
+      return confirmed
+    } catch (error) {
+      if (error instanceof PartialMarkReadError) throw error
+      const known = classifyImapError(error)
+      throw new PartialMarkReadError(known.message, [...confirmed], known.technical)
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    this.shuttingDown = true
+    for (const client of this.clients) client.close()
+    if (!this.clients.size) return
+    await new Promise<void>((resolve) => this.idleResolvers.push(resolve))
   }
 
   async fetchDetail(accountId: string, uid: number, expectedUidValidity: string): Promise<{ textBody: string | null; htmlBody: string | null; recipients: string[]; attachments: Array<AttachmentInfo & { content: Buffer }> }> {

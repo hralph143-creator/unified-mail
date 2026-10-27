@@ -13,4 +13,8 @@ export class KeyedMutex {
       if (this.tails.get(key) === tail) this.tails.delete(key)
     }
   }
+
+  async waitForIdle(): Promise<void> {
+    while (this.tails.size) await Promise.all([...this.tails.values()])
+  }
 }

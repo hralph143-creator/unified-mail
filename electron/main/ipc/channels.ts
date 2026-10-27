@@ -7,6 +7,7 @@ export const IPC_CHANNELS = [
   'mails:list',
   'mails:detail',
   'mails:mark-read',
+  'mails:mark-all-read',
   'mails:download-attachment',
   'sync:all',
   'sync:account',
@@ -16,6 +17,8 @@ export const IPC_CHANNELS = [
   'settings:update',
   'settings:data-path',
   'settings:clear-cache',
+  'window:set-tour-overlay',
+  'window:control',
   'shell:open-external'
 ] as const
 

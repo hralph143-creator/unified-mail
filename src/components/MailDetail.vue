@@ -6,7 +6,7 @@ import type { MailDetail, MailSummary } from '../../shared/types'
 import { fileSize, formatTime } from '../utils'
 
 const props = defineProps<{ selected: MailSummary | null; detail: MailDetail | null; loading: boolean }>()
-const emit = defineEmits<{ markRead: []; download: [id: string] }>()
+const emit = defineEmits<{ back: []; markRead: []; download: [id: string] }>()
 const safeHtml = computed(() => {
   if (!props.detail?.htmlBody) return ''
   return DOMPurify.sanitize(props.detail.htmlBody, { FORBID_TAGS: ['script','style','iframe','object','embed','form','input','button','video','audio'], FORBID_ATTR: ['style','srcset'], ADD_ATTR: ['target','rel'] })
@@ -18,7 +18,7 @@ function clickContent(event: MouseEvent) {
   if (!anchor) return
   event.preventDefault()
   const href = anchor.getAttribute('href')
-  if (href) void window.unifiedMail.shell.openExternal(href)
+  if (href) void window.unifiedMail.shell.openExternal(href).catch(() => undefined)
 }
 </script>
 
@@ -33,7 +33,8 @@ function clickContent(event: MouseEvent) {
     <NSpin v-else :show="loading" class="detail-spin">
       <template v-if="detail">
         <header class="detail-header">
-          <div><span class="detail-kicker">邮件详情</span><h2>{{ detail.subject }}</h2></div>
+          <NButton class="detail-back" quaternary size="small" aria-label="返回邮件列表" @click="emit('back')">← 返回</NButton>
+          <div class="detail-title"><span class="detail-kicker">邮件详情</span><h2>{{ detail.subject }}</h2></div>
           <NButton type="primary" secondary :loading="selected.operationPending" @click="emit('markRead')">标记已读</NButton>
         </header>
         <dl class="mail-addresses">

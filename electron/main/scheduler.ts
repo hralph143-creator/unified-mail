@@ -8,6 +8,7 @@ export class SyncScheduler {
   constructor(private readonly sync: SyncService, private readonly settings: SettingsService) {}
 
   start(): void {
+    this.lastCheck = Date.now()
     this.restart()
     powerMonitor.on('resume', this.onResume)
   }
@@ -18,13 +19,13 @@ export class SyncScheduler {
     const settings = this.settings.get()
     if (!settings.autoSyncEnabled) return
     const interval = Math.max(15, settings.syncIntervalMinutes) * 60_000
-    this.timer = setInterval(() => { this.lastCheck = Date.now(); void this.sync.syncAll('scheduled') }, interval)
+    this.timer = setInterval(() => { this.lastCheck = Date.now(); void this.sync.syncAll('scheduled').catch(() => undefined) }, interval)
   }
 
   private readonly onResume = (): void => {
     const settings = this.settings.get()
     const interval = Math.max(15, settings.syncIntervalMinutes) * 60_000
-    if (settings.autoSyncEnabled && Date.now() - this.lastCheck >= interval) { this.lastCheck = Date.now(); void this.sync.syncAll('scheduled') }
+    if (settings.autoSyncEnabled && Date.now() - this.lastCheck >= interval) { this.lastCheck = Date.now(); void this.sync.syncAll('scheduled').catch(() => undefined) }
   }
 
   stop(): void {

@@ -74,6 +74,9 @@ export interface MailQuery {
   sort: 'desc' | 'asc'
 }
 
+export interface MailScope { accountId?: string; provider?: Provider }
+export interface MarkAllReadResult { marked: number; succeeded: number; failed: number }
+
 export interface PageResult<T> { items: T[]; total: number }
 
 export interface AppSettings {
@@ -107,6 +110,7 @@ export interface SyncSummary {
   failed: number
   added: number
   updated: number
+  remaining: number
 }
 
 export interface TestConnectionResult { ok: boolean; code?: string; message: string }
@@ -129,6 +133,7 @@ export interface UnifiedMailApi {
     list(query: MailQuery): Promise<PageResult<MailSummary>>
     detail(id: string): Promise<MailDetail>
     markRead(id: string): Promise<void>
+    markAllRead(scope: MailScope): Promise<MarkAllReadResult>
     downloadAttachment(mailId: string, attachmentId: string): Promise<string | null>
   }
   sync: {
@@ -142,6 +147,10 @@ export interface UnifiedMailApi {
     update(patch: Partial<AppSettings>): Promise<AppSettings>
     dataPath(): Promise<string>
     clearMailCache(): Promise<void>
+  }
+  appearance: {
+    setTourOverlay(active: boolean): Promise<{ minimizable: boolean; maximizable: boolean; closable: boolean }>
+    controlWindow(action: 'minimize' | 'maximize' | 'close'): Promise<void>
   }
   shell: { openExternal(url: string): Promise<void> }
   events: { on<K extends keyof RendererEventMap>(event: K, callback: (payload: RendererEventMap[K]) => void): () => void }

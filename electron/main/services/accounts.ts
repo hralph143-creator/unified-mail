@@ -39,10 +39,12 @@ export class AccountService {
     const duplicate = this.database.sqlite.prepare('SELECT id FROM accounts WHERE lower(email)=lower(?) AND id<>?').get(input.email.trim(), input.id ?? '')
     if (duplicate) throw new Error('该邮箱账户已存在')
     const id = existing?.id ?? randomUUID()
-    const credentialReference = this.credentials.save(input.authorizationCode, existing?.credentialReference)
-    this.database.sqlite.prepare(`INSERT INTO accounts(id,email,provider,display_name,imap_host,imap_port,imap_secure,credential_reference,is_enabled,connection_status,created_at,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,1,'idle',?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,provider=excluded.provider,display_name=excluded.display_name,imap_host=excluded.imap_host,imap_port=excluded.imap_port,imap_secure=excluded.imap_secure,credential_reference=excluded.credential_reference,connection_status='idle',last_error=NULL,updated_at=excluded.updated_at`)
-      .run(id, input.email.trim().toLowerCase(), input.provider, input.displayName.trim() || input.email.trim(), input.imapHost.trim(), input.imapPort, input.imapSecure ? 1 : 0, credentialReference, now, now)
+    this.database.sqlite.transaction(() => {
+      const credentialReference = this.credentials.save(input.authorizationCode, existing?.credentialReference)
+      this.database.sqlite.prepare(`INSERT INTO accounts(id,email,provider,display_name,imap_host,imap_port,imap_secure,credential_reference,is_enabled,connection_status,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,1,'idle',?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,provider=excluded.provider,display_name=excluded.display_name,imap_host=excluded.imap_host,imap_port=excluded.imap_port,imap_secure=excluded.imap_secure,credential_reference=excluded.credential_reference,connection_status='idle',last_error=NULL,updated_at=excluded.updated_at`)
+        .run(id, input.email.trim().toLowerCase(), input.provider, input.displayName.trim() || input.email.trim(), input.imapHost.trim(), input.imapPort, input.imapSecure ? 1 : 0, credentialReference, now, now)
+    })()
     return this.get(id)!
   }
 
