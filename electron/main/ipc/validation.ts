@@ -26,14 +26,17 @@ export function parseAccountInput(raw: unknown): AccountInput {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('请输入有效的完整邮箱地址')
   const port = Number(value.imapPort)
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('IMAP 端口无效')
+  const requestedSecure = value.imapSecure === undefined ? true : parseBoolean(value.imapSecure, 'TLS 设置')
+  const preset = PROVIDERS[provider as AccountInput['provider']]
+  const custom = provider === 'custom'
   return {
     id: value.id === undefined ? undefined : parseId(value.id),
     email,
     provider: provider as AccountInput['provider'],
     displayName: typeof value.displayName === 'string' ? value.displayName.slice(0, 100) : '',
-    imapHost: parseText(value.imapHost, 'IMAP 服务器', 253),
-    imapPort: port,
-    imapSecure: value.imapSecure === undefined ? true : parseBoolean(value.imapSecure, 'TLS 设置'),
+    imapHost: custom ? parseText(value.imapHost, 'IMAP 服务器', 253) : preset.host,
+    imapPort: custom ? port : preset.port,
+    imapSecure: custom ? requestedSecure : preset.secure,
     authorizationCode: parseText(value.authorizationCode, '客户端授权码', 500)
   }
 }

@@ -1,4 +1,4 @@
-import { ImapFlow } from 'imapflow'
+import { ImapFlow, type ImapFlowOptions } from 'imapflow'
 import { simpleParser, type AddressObject } from 'mailparser'
 import type { AccountInput, AttachmentInfo, TestConnectionResult } from '../../../shared/types'
 import type { AccountService } from './accounts'
@@ -25,14 +25,39 @@ export class ImapService {
   private readonly clients = new Set<ImapFlow>()
   private shuttingDown = false
   private idleResolvers: Array<() => void> = []
-  constructor(private readonly accounts: AccountService, private readonly credentials: CredentialService, private readonly logger: AppLogger) {}
+  constructor(
+    private readonly accounts: AccountService,
+    private readonly credentials: CredentialService,
+    private readonly logger: AppLogger,
+    private readonly createImapClient: (options: ImapFlowOptions) => ImapFlow = (options) => new ImapFlow(options)
+  ) {}
 
   private createClient(config: { email: string; host: string; port: number; secure: boolean; authorizationCode: string }): ImapFlow {
-    return new ImapFlow({
+    const client = this.createImapClient({
       host: config.host, port: config.port, secure: config.secure,
+      doSTARTTLS: config.secure ? undefined : true,
       auth: { user: config.email, pass: config.authorizationCode },
       logger: false, tls: { rejectUnauthorized: true }, socketTimeout: 45_000, greetingTimeout: 20_000
     })
+    // Socket errors after connect() are emitted separately from command rejections.
+    client.on('error', (error: unknown) => {
+      this.logger.warn({ code: classifyImapError(error).code }, '邮箱连接中断')
+      client.close()
+    })
+    return client
+  }
+
+  private async releaseClient(client: ImapFlow): Promise<void> {
+    try {
+      if (client.usable) await client.logout()
+    } catch { /* 强制关闭仍未完成正常退出的连接。 */ }
+    finally {
+      client.close()
+      this.clients.delete(client)
+      if (!this.clients.size) {
+        for (const resolve of this.idleResolvers.splice(0)) resolve()
+      }
+    }
   }
 
   async withAccount<T>(accountId: string, action: (client: ImapFlow) => Promise<T>): Promise<T> {
@@ -49,11 +74,7 @@ export class ImapService {
     } catch (error) {
       throw classifyImapError(error)
     } finally {
-      if (client.usable) await client.logout().catch(() => client.close())
-      this.clients.delete(client)
-      if (!this.clients.size) {
-        for (const resolve of this.idleResolvers.splice(0)) resolve()
-      }
+      await this.releaseClient(client)
     }
   }
 
@@ -67,14 +88,10 @@ export class ImapService {
       return { ok: true, message: '连接和认证成功' }
     } catch (error) {
       const classified = classifyImapError(error)
-      this.logger.warn({ code: classified.code, technical: classified.technical }, '邮箱连接测试失败')
+      this.logger.warn({ code: classified.code }, '邮箱连接测试失败')
       return { ok: false, code: classified.code, message: classified.message }
     } finally {
-      if (client.usable) await client.logout().catch(() => client.close())
-      this.clients.delete(client)
-      if (!this.clients.size) {
-        for (const resolve of this.idleResolvers.splice(0)) resolve()
-      }
+      await this.releaseClient(client)
     }
   }
 
@@ -144,10 +161,13 @@ export class ImapService {
             const changed = await client.messageFlagsAdd(batch, ['\\Seen'], { uid: true })
             if (!changed) throw new PartialMarkReadError('服务器未确认批量已读操作，请重新同步确认状态', [...confirmed])
             const seen = new Set<number>()
+            const requestedSet = new Set(requested)
             for await (const message of client.fetch(batch, { uid: true, flags: true }, { uid: true })) {
-              if (message.flags?.has('\\Seen')) seen.add(message.uid)
+              if (requestedSet.has(message.uid) && message.flags?.has('\\Seen') && !seen.has(message.uid)) {
+                seen.add(message.uid)
+                confirmed.push(message.uid)
+              }
             }
-            confirmed.push(...requested.filter((uid) => seen.has(uid)))
             if (seen.size !== requested.length) throw new PartialMarkReadError('部分邮件已被移动、删除或未能确认已读状态', [...confirmed])
           }
         } finally { lock.release() }
@@ -156,6 +176,7 @@ export class ImapService {
     } catch (error) {
       if (error instanceof PartialMarkReadError) throw error
       const known = classifyImapError(error)
+      if (!confirmed.length) throw known
       throw new PartialMarkReadError(known.message, [...confirmed], known.technical)
     }
   }

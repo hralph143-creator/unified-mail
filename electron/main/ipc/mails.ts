@@ -10,13 +10,16 @@ async function saveAttachment(mails: MailService, rawMailId: unknown, rawAttachm
   const options = { title: '保存附件', defaultPath: item.filename }
   const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
   if (result.canceled || !result.filePath) return null
-  await writeFile(result.filePath, item.content, { flag: 'wx' }).catch(async (error: unknown) => {
+  try {
+    await writeFile(result.filePath, item.content, { flag: 'wx' })
+  } catch (error: unknown) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : ''
     if (code !== 'EEXIST') throw error
     const boxOptions = { type: 'question' as const, buttons: ['取消', '覆盖'], defaultId: 0, cancelId: 0, message: '文件已存在，是否覆盖？' }
     const overwrite = window ? await dialog.showMessageBox(window, boxOptions) : await dialog.showMessageBox(boxOptions)
-    if (overwrite.response === 1) await writeFile(result.filePath!, item.content)
-  })
+    if (overwrite.response !== 1) return null
+    await writeFile(result.filePath, item.content)
+  }
   return result.filePath
 }
 

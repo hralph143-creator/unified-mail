@@ -20,6 +20,17 @@ describe('IPC 输入校验', () => {
     })
   })
 
+  it('内置服务商始终使用固定服务器，避免授权码被发送到错误主机', () => {
+    expect(parseAccountInput({
+      email: 'user@163.com', provider: '163', displayName: '', imapHost: 'attacker.invalid', imapPort: 143,
+      imapSecure: false, authorizationCode: 'secret'
+    })).toMatchObject({ imapHost: 'imap.163.com', imapPort: 993, imapSecure: true })
+    expect(parseAccountInput({
+      email: 'user@example.com', provider: 'custom', displayName: '', imapHost: 'mail.example.com', imapPort: 143,
+      imapSecure: false, authorizationCode: 'secret'
+    })).toMatchObject({ imapHost: 'mail.example.com', imapPort: 143, imapSecure: false })
+  })
+
   it('拒绝未知服务商和非邮件地址', () => {
     expect(() => parseAccountInput({ provider: 'unknown' })).toThrow('邮箱服务商无效')
     expect(() => parseAccountInput({ provider: 'qq', email: 'invalid', imapHost: 'imap.qq.com', imapPort: 993, authorizationCode: 'secret' })).toThrow('请输入有效的完整邮箱地址')

@@ -4,7 +4,9 @@ dist-electron/
 release/
 release-final/
 release-delivery/
+release-signed/
 coverage/
+.tmp/
 *.log
 *.db
 *.db-shm

@@ -45,7 +45,7 @@ pnpm dev
 run.bat --check
 ```
 
-该命令依次运行严格类型检查、ESLint、Vitest 和生产构建。另可执行 `pnpm test:responsive` 验证 8 种窗口尺寸。测试使用临时 SQLite 数据库与模拟 IMAP 服务，不会连接真实邮箱。
+该命令依次运行严格类型检查、ESLint、Vitest 和生产构建。另可执行 `pnpm test:responsive` 验证 8 种窗口尺寸及 4 种设备比例，构建后用 `pnpm test:packaged` 验证解包版启动。测试使用临时 SQLite 数据库与模拟 IMAP 服务，不会连接真实邮箱。
 
 ## 添加邮箱
 
@@ -79,6 +79,8 @@ pnpm package:win
 
 当前项目没有商业代码签名证书。未签名安装器在部分 Windows 设备上可能触发 SmartScreen 信誉提示；正式公开发布前应配置受信任的代码签名证书。
 
+需要生成签名候选时执行 `pnpm package:win:signed`。该命令会在缺少证书时直接失败，避免误把未签名包当作正式包。
+
 ## 工程结构
 
 ```text
@@ -101,6 +103,8 @@ build/                  应用 PNG/ICO 图标
 
 ## 测试与限制
 
-自动化测试覆盖多账户聚合、增量 UID 对账、账户部分失败、后台自动重试、重复任务复用、外部已读状态、UIDVALIDITY 变化、批量部分确认、异常中断状态恢复、附件缓存淘汰和已读写回失败恢复。真实服务商的认证、风控和服务器行为必须由账户所有者按 [真实邮箱验收清单](docs/REAL_MAIL_ACCEPTANCE.md) 手工验证，模拟测试通过不等于真实邮箱已经验收。发布前事项见 [Windows 发布前检查清单](docs/RELEASE_CHECKLIST.md)。
+自动化测试共 4 个文件、45 项，覆盖多账户聚合、增量 UID 对账、账户部分失败、后台自动重试、重复任务复用、外部已读状态、UIDVALIDITY 变化、批量部分确认、异常中断状态恢复、附件缓存淘汰和已读写回失败恢复。真实服务商的认证、风控和服务器行为必须由账户所有者按 [真实邮箱验收清单](docs/REAL_MAIL_ACCEPTANCE.md) 手工验证，模拟测试通过不等于真实邮箱已经验收。
+
+当前全量依赖审计仍有 22 项公告（高危 8、中危 9、低危 5、严重 0），且安装包未签名，因此只适合作为内部测试候选，不能标记为正式公开发布。发布前事项见 [Windows 发布前检查清单](docs/RELEASE_CHECKLIST.md) 和 [Windows 兼容性验收记录](docs/WINDOWS_ACCEPTANCE.md)。
 
 常见连接问题见 [用户操作与故障排查](docs/USER_GUIDE.md)。

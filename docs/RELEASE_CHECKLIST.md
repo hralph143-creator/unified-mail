@@ -1,37 +1,47 @@
 # Windows 发布前检查清单
 
-## 自动化检查
+## 构建与自动化
 
-```powershell
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm test:responsive
-```
+- [x] `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build` 在 2026-10-31 通过；4 个测试文件、45 项测试。
+- [x] `pnpm test:responsive` 在桌面环境通过 8 种窗口尺寸及 100%、125%、150%、200% 设备比例模拟。
+- [x] `run.bat --check` 已重跑，类型检查、Lint、45 项测试和生产构建全部通过。
+- [x] `pnpm package:win` 已生成内部候选包；最终大小、SHA-256 和 Authenticode 状态记录在交付报告中。
+- [x] 解包版和安装版分别完成启动冒烟；均验证 Preload、全高布局和首次 SQLite 初始化。
 
-全部成功后再运行 `pnpm package:win`。安装包输出到 `release-delivery/`，该目录不提交 Git。
+## 安装、升级与卸载
 
-## 发布阻断项
+- [x] NSIS 为当前用户辅助安装，`requestedExecutionLevel=asInvoker`，允许选择安装目录并创建桌面/开始菜单快捷方式。
+- [x] 数据库、凭据和日志位于 Electron 当前用户目录；`deleteAppDataOnUninstall=false` 明确保留数据。
+- [x] 正式卸载清理名为 `UnifiedMail` 的开机启动项；升级卸载不清理该项。
+- [x] 当前 Windows 主机完成辅助安装、桌面/开始菜单快捷方式、安装版启动、正式卸载、卸载项和开机启动项清理。
+- [ ] 在干净 Windows 10 x64 与 Windows 11 x64 分别验证安装、首次启动、快捷方式、重复启动、升级、正式卸载和数据保留。
+- [ ] 验证中文安装路径、普通用户权限，以及升级前后账户、凭据、邮件身份和设置保持。
 
-- 按 `REAL_MAIL_ACCEPTANCE.md` 完成 QQ、163、126 和至少一种标准 IMAP 服务的人工验收。
-- 使用专用测试账户验证单封及批量 `\\Seen` 回写，不得在未授权的真实邮箱执行批量已读。
-- 配置受信任的 Windows 代码签名证书并签名安装器。当前仓库没有证书，禁止提交 `.pfx`、`.p12`、`.pem` 或 `.key` 文件。
-- 在干净的 Windows 10 与 Windows 11 x64 环境安装、启动、升级和卸载。
-- 检查 SmartScreen、托盘退出、开机启动、休眠恢复和安装目录变更。
+## 邮箱与可靠性
 
-## 隐私与安全复核
+- [x] 自动化模拟覆盖服务商配置隔离、TLS/STARTTLS、UID/UIDVALIDITY、部分已读确认、断线、限流分类、异常中断恢复和账户级串行。
+- [ ] 按 `REAL_MAIL_ACCEPTANCE.md` 使用专用账户完成 QQ、163、126 和标准 IMAP 人工验收。
+- [ ] 真实单封及批量 `\\Seen` 测试须由账户所有者明确授权；未授权不得执行。
+- [ ] 实机验证断网恢复、休眠唤醒、服务商风控与限流、其他客户端改变状态。
 
-- `contextIsolation: true`、`sandbox: true`、`nodeIntegration: false` 保持不变。
-- Preload 只暴露 `UnifiedMailApi` 中声明的能力；所有 IPC 输入均经过校验。
-- 检查提交内容不含数据库、WAL、日志、授权码、真实邮件、附件和证书。
-- 确认日志不记录授权码、正文和附件内容；分享日志前仍需人工脱敏邮箱地址。
-- HTML 邮件继续使用 DOMPurify、CSP 和远程图片限制。
-- 附件只能由用户选择路径后保存，不能自动打开或执行。
+## Windows 兼容性
 
-## 当前已知限制
+- [x] 自绘标题栏、全高布局、窄屏切换、立即同步白字、一键已读和引导期间窗口按钮锁定由响应式脚本覆盖。
+- [x] 调度器在休眠时停止定时任务，唤醒后按间隔补偿一次并重新计时；启动/停止监听幂等。
+- [ ] Windows 10/11、100%/125%/150%/200% 系统缩放、多显示器、深浅主题、注销/关机均需实机验证。
 
-- 没有 Windows 商业代码签名证书，安装器可能触发 SmartScreen。
-- 自动同步只在应用/托盘进程运行时执行，关机期间不会同步。
-- 服务商认证、风控、限流和 UIDVALIDITY 行为只能通过真实账户人工验证。
-- 本地凭据安全依赖 Windows 当前登录会话；无法抵御已经控制该会话的攻击者。
+## 安全与隐私
+
+- [x] 保持 `contextIsolation: true`、`sandbox: true`、`nodeIntegration: false`、导航和弹窗阻止。
+- [x] 内置服务商主机/端口/TLS 由 IPC 固定，避免授权码发送到调用方指定的错误服务器。
+- [x] 日志不保留授权码、正文、附件或服务端原始错误文本；提交内容检查数据库、日志、真实邮件和证书。
+- [ ] 2026-10-31 官方 npm registry 全量审计报告 22 项：高危 8、中危 9、低危 5、严重 0。Electron 39、Drizzle 0.44 及构建/解析依赖的公告需要完成适用性复核和受控升级后再公开发布。
+
+## 签名与归档
+
+- [x] 未签名内部包使用 `pnpm package:win`；签名候选使用 `pnpm package:win:signed`，输出到 `release-signed/` 并强制缺证书时构建失败。
+- [ ] 通过 CI 密钥注入 `WIN_CSC_LINK`、`WIN_CSC_KEY_PASSWORD`；证书和密码不得提交或写入日志。
+- [x] 已对内部候选安装器和主程序执行 Authenticode 与 SHA-256 检查，状态均为 `NotSigned`；不能作为公开正式包。
+- [ ] 检查 Git 差异、敏感信息和测试结果后提交并正常推送；外部验收未完成前不创建正式 `v1.0.0` Tag。
+
+当前发布级别只能是“内部测试候选版”。真实邮箱、Windows 10/11 双环境、完整安装升级卸载、依赖安全收口和可信签名全部完成后，才能评估正式发布。

@@ -15,10 +15,12 @@
     "lint": "eslint . --max-warnings=0",
     "test": "node scripts/run-tests.mjs",
     "test:responsive": "node scripts/responsive-smoke.mjs",
+    "test:packaged": "node scripts/packaged-smoke.mjs",
     "test:watch": "node scripts/run-tests.mjs --watch",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "rebuild:electron": "node scripts/ensure-electron-native.mjs --repair",
     "package:win": "pnpm build && pnpm rebuild:electron && electron-builder --win nsis",
+    "package:win:signed": "pnpm build && pnpm rebuild:electron && electron-builder --win nsis --config.forceCodeSigning=true --config.directories.output=release-signed",
     "postinstall": "node scripts/ensure-electron-native.mjs"
   },
   "dependencies": {
@@ -64,10 +66,12 @@
     "files": [
       "dist/**",
       "dist-electron/**",
+      "build/icon.png",
       "package.json"
     ],
     "win": {
       "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
       "target": [
         {
           "target": "nsis",
@@ -80,7 +84,10 @@
     },
     "nsis": {
       "oneClick": false,
+      "include": "build/installer.nsh",
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "多邮箱统一管理"

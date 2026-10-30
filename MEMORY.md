@@ -1,6 +1,6 @@
 # UnifiedMail 项目记忆
 
-> 更新日期：2026-10-27（Asia/Shanghai）
+> 更新日期：2026-10-31（Asia/Shanghai）
 > 用途：供后续开发者或 AI 在重新进入项目时快速恢复上下文。事实以当前代码与测试结果为准。
 
 ## 1. 项目目标
@@ -28,6 +28,7 @@ UnifiedMail 是 Windows 10/11 本地桌面应用，用于统一管理多个 QQ�
 - 共享类型：`shared/types.ts`。
 - Vue 界面：`src/`。
 - 核心测试：`tests/`；响应式桌面验收：`scripts/responsive-smoke.mjs`。
+- 打包启动验收：`scripts/packaged-smoke.mjs`；Windows 实测记录：`docs/WINDOWS_ACCEPTANCE.md`。
 
 ## 3. 当前已实现的重要能力
 
@@ -85,6 +86,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm test:responsive
+pnpm test:packaged
 ```
 
 也可执行：
@@ -97,19 +99,17 @@ run.bat --check
 
 - TypeScript 类型检查通过。
 - ESLint 通过。
-- Vitest：2 个测试文件、28 项测试通过。
+- Vitest：4 个测试文件、45 项测试通过。
 - 生产构建通过。
 - 响应式验收的 8 种尺寸全部通过。
-- 生产依赖审计未发现已知漏洞。
-- Windows NSIS 安装包构建及解包版启动冒烟测试通过；安装器仍未进行商业代码签名。
+- 2026-10-31 全量 npm 审计发现 22 项公告：高危 8、中危 9、低危 5、严重 0；完成受控升级和回归前不得公开发布。
+- Windows NSIS 安装包构建、解包版和当前主机安装版启动冒烟通过；辅助安装、快捷方式和正式卸载清理已实测。安装器仍未进行商业代码签名。
 - 响应式脚本还会检查：界面全高、无横向溢出、单双栏切换、窄屏返回按钮、窗口控制按钮在模态状态下不变色且不可点击、“立即同步”白色文字，以及“一键已读”按钮完整显示。
 
 ## 6. 当前 Git 状态
 
-- 本阶段开始时的最近提交：`dca41c0 refactor: modularize main process architecture`。
-- 更早提交：`04230ab feat: initial UnifiedMail desktop application`。
-- `dca41c0` 已推送过远端。
-- `dca41c0` 之后的可靠性、响应式、自绘标题栏、一键已读和稳定性收口改动应作为同一阶段归档；实际归档提交以 `git log` 最新记录为准。
+- 本轮发布验证开始时的基线提交：`a33d8f655b5fd8e2790c5f2d46ac3e9c4d7445a2`。
+- 本轮可靠性、响应式、协议模拟、Windows 安装验收和发布文档改动应作为同一阶段归档；实际归档提交以 `git log` 最新记录为准。
 - `scripts/responsive-smoke.mjs` 是正式验收脚本，不应被当作临时文件删除。
 - 不要用 `git reset --hard`、`git checkout --` 或 `git clean -fd` 丢弃工作区内容。
 
@@ -126,9 +126,13 @@ run.bat --check
 - 共享 API 契约：`shared/types.ts`。
 - 同步/已读集成测试：`tests/sync.test.ts`。
 - IPC 输入校验测试：`tests/ipc-validation.test.ts`。
+- IMAP 协议兼容模拟：`tests/imap-compat.test.ts`。
+- 桌面服务、开机启动和附件覆盖取消：`tests/desktop-services.test.ts`。
 
 ## 8. 后续建议
 
 - 用真实 QQ、163、126 和自定义 IMAP 账户执行 `docs/REAL_MAIL_ACCEPTANCE.md`，重点验证批量 `\\Seen`、UIDVALIDITY 变化、授权过期和限流行为。
 - 正式发布前配置 Windows 代码签名证书，并重新生成安装包。
+- 在干净 Windows 10 x64、Windows 11 x64 和真实授权测试邮箱上完成剩余人工验收。
+- 对 Electron、Drizzle 及构建/解析依赖公告逐项复核，采用受控升级，不做无回归验证的跨大版本替换。
 - 若继续增加批量操作，沿用“服务器确认后更新本地、账户级部分失败隔离、操作中禁用重复点击”的模式。

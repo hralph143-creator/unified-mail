@@ -18,7 +18,7 @@ function reset() {
   tested.value = false
 }
 watch(() => props.show, (value) => { if (value) reset() })
-watch(() => form.email, (value) => { if (!props.account) { const inferred = inferProvider(value); if (inferred !== 'custom') form.provider = inferred } })
+watch(() => form.email, (value) => { if (!props.account && value.includes('@')) form.provider = inferProvider(value) })
 watch(() => form.provider, (provider: Provider) => { if (provider !== 'custom') Object.assign(form, { imapHost: PROVIDERS[provider].host, imapPort: PROVIDERS[provider].port, imapSecure: true }); tested.value = false })
 
 async function test() {
@@ -43,9 +43,10 @@ async function save() {
       <template v-if="form.provider === 'custom'">
         <NFormItem label="IMAP 服务器"><NInput v-model:value="form.imapHost" /></NFormItem>
         <NFormItem label="端口"><NInputNumber v-model:value="form.imapPort" :min="1" :max="65535" /></NFormItem>
-        <NFormItem label="SSL/TLS"><NSwitch v-model:value="form.imapSecure" /></NFormItem>
+        <NFormItem label="直接 SSL/TLS"><NSwitch v-model:value="form.imapSecure" /></NFormItem>
       </template>
       <NAlert type="info" :bordered="false">请先在邮箱网页设置中开启 IMAP 服务，并使用服务商生成的第三方客户端授权码。应用不会尝试绕过服务商的安全验证。</NAlert>
+      <NAlert v-if="form.provider === 'custom' && !form.imapSecure" type="warning" :bordered="false">关闭直接 SSL/TLS 时仍会强制使用 STARTTLS；服务器不支持安全升级则连接失败。</NAlert>
       <div class="dialog-actions"><NButton :loading="busy" @click="test">测试连接</NButton><NButton type="primary" attr-type="submit" :loading="busy" :disabled="!form.email || !form.authorizationCode || !form.imapHost">连接并保存</NButton></div>
     </NForm>
   </NModal>

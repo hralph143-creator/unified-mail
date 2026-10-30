@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { createLogger } from './services/logger'
 import { registerIpc, unregisterIpc, waitForIpcIdle } from './ipc'
 import { createApplicationContext, type ApplicationContext } from './application'
-import { createAppTray, createMainWindow } from './desktop'
+import { appIcon, createAppTray, createMainWindow } from './desktop'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 let mainWindow: BrowserWindow | null = null
@@ -13,6 +13,7 @@ let quitting = false
 let shutdownStarted = false
 let shutdownComplete = false
 let context: ApplicationContext | null = null
+let startupTimer: NodeJS.Timeout | null = null
 
 function showWindow(): void {
   if (!mainWindow) return
@@ -21,12 +22,14 @@ function showWindow(): void {
   mainWindow.focus()
 }
 
-function openWindow(): BrowserWindow {
+function openWindow(showOnReady = true): BrowserWindow {
   if (!context) throw new Error('应用尚未初始化')
   return createMainWindow({
     currentDir,
     shouldMinimizeToTray: () => context?.settings.get().minimizeToTray ?? false,
     isQuitting: () => quitting,
+    showOnReady,
+    onSessionEnd: beginShutdown,
     onClosed: () => { mainWindow = null }
   })
 }
@@ -37,11 +40,12 @@ async function bootstrap(): Promise<void> {
   logger.info({ version: app.getVersion() }, '应用启动')
   context = createApplicationContext(logger)
   const { accounts, imap, mails, settings, sync, scheduler } = context
+  if (appIcon.isEmpty()) throw new Error('应用图标资源缺失，请重新安装应用')
   registerIpc({ accounts, imap, mails, settings, sync, onSettingsChanged: () => scheduler.restart() })
-  mainWindow = openWindow()
+  mainWindow = openWindow(!process.argv.includes('--hidden'))
   tray = createAppTray({ onShow: showWindow, onSync: () => { void sync.syncAll('manual').catch(() => undefined) }, onQuit: () => { quitting = true } })
   scheduler.start()
-  if (settings.get().autoSyncEnabled) setTimeout(() => { void sync.syncAll('startup').catch(() => undefined) }, 1500)
+  if (settings.get().autoSyncEnabled) startupTimer = setTimeout(() => { startupTimer = null; if (!quitting) void sync.syncAll('startup').catch(() => undefined) }, 1500)
 }
 
 const hasLock = process.env.UNIFIEDMAIL_ALLOW_MULTIPLE === '1' || app.requestSingleInstanceLock()
@@ -57,13 +61,19 @@ else {
 }
 
 app.on('activate', () => { if (mainWindow) showWindow(); else if (app.isReady() && context) mainWindow = openWindow() })
-app.on('window-all-closed', () => { /* Windows 下由托盘菜单决定何时退出。 */ })
+app.on('window-all-closed', () => { if (!quitting) app.quit() })
 app.on('before-quit', (event) => {
   if (shutdownComplete) return
   event.preventDefault()
+  beginShutdown()
+})
+
+function beginShutdown(): void {
   if (shutdownStarted) return
   shutdownStarted = true
   quitting = true
+  if (startupTimer) clearTimeout(startupTimer)
+  startupTimer = null
   mainWindow?.setClosable(true)
   mainWindow?.setMinimizable(true)
   mainWindow?.setMaximizable(true)
@@ -82,4 +92,4 @@ app.on('before-quit', (event) => {
     shutdownComplete = true
     app.exit(1)
   })
-})
+}

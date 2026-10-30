@@ -15,9 +15,14 @@ const port = 9334
 const processHandle = spawn(electronPath, [`--remote-debugging-port=${port}`, `--user-data-dir=${userData}`, '.'], {
   cwd: root,
   env: { ...process.env, UNIFIEDMAIL_ALLOW_MULTIPLE: '1' },
-  stdio: 'ignore',
+  stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true
 })
+let startupOutput = ''
+for (const stream of [processHandle.stdout, processHandle.stderr]) {
+  stream.setEncoding('utf8')
+  stream.on('data', (chunk) => { startupOutput = (startupOutput + chunk).slice(-4000) })
+}
 
 class CdpClient {
   constructor(url) {
@@ -58,8 +63,9 @@ async function waitForPage() {
       const page = pages.find((item) => item.type === 'page')
       if (page) return page
     } catch { /* Electron 仍在启动。 */ }
+    if (processHandle.exitCode !== null) throw new Error(`Electron 提前退出（${processHandle.exitCode}）：${startupOutput.trim() || '无启动日志'}`)
   }
-  throw new Error('Electron 页面未在规定时间内启动')
+  throw new Error(`Electron 页面未在规定时间内启动：${startupOutput.trim() || '无启动日志'}`)
 }
 
 function ensure(condition, message) {
@@ -169,8 +175,29 @@ try {
       writeFileSync(process.env.RESPONSIVE_SCREENSHOT_PATH, Buffer.from(screenshot.data, 'base64'))
     }
   }
+  const dpiResults = []
+  for (const deviceScaleFactor of [1, 1.25, 1.5, 2]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 840, deviceScaleFactor, mobile: false })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const evaluated = await cdp.send('Runtime.evaluate', {
+      expression: `(() => ({
+        devicePixelRatio,
+        rootFits: document.documentElement.scrollWidth <= innerWidth,
+        shellHeight: Math.round(document.querySelector('.app-shell').getBoundingClientRect().height),
+        toolbarFits: document.querySelector('.mail-toolbar').scrollWidth <= document.querySelector('.mail-toolbar').clientWidth,
+        syncLabelColor: getComputedStyle(document.querySelector('.sync-button .n-button__content')).color
+      }))()`,
+      returnByValue: true
+    })
+    const value = evaluated.result.value
+    ensure(Math.abs(value.devicePixelRatio - deviceScaleFactor) < 0.01, `${deviceScaleFactor * 100}% DPI 模拟比例不正确（实际 ${value.devicePixelRatio}）`)
+    ensure(value.rootFits && value.toolbarFits, `${deviceScaleFactor * 100}% DPI 模拟出现内容溢出`)
+    ensure(Math.abs(value.shellHeight - 840) <= 1, `${deviceScaleFactor * 100}% DPI 模拟主界面未铺满窗口`)
+    ensure(value.syncLabelColor === 'rgb(255, 255, 255)', `${deviceScaleFactor * 100}% DPI 模拟“立即同步”文字对比度不足`)
+    dpiResults.push(`${deviceScaleFactor * 100}%`)
+  }
   cdp.close()
-  console.log(JSON.stringify({ layout: results }, null, 2))
+  console.log(JSON.stringify({ layout: results, dpiSimulation: dpiResults }, null, 2))
 } finally {
   if (processHandle.exitCode === null) {
     processHandle.kill()
